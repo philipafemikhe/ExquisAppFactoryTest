@@ -9,6 +9,8 @@ import javax.persistence.Entity;
 import javax.persistence.GeneratedValue;
 import javax.persistence.GenerationType;
 import javax.persistence.Id;
+import java.sql.Time;
+import java.sql.Timestamp;
 import java.util.Date;
 
 @Entity(name = "employee_register")
@@ -25,5 +27,5 @@ public class Employee {
     private String employeeName;
     private String email;
     private String address;
-    private Date timeIn;
+    private Time timeIn;
 }
