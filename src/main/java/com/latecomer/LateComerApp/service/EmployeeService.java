@@ -6,6 +6,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
+import java.util.Optional;
 
 @Service
 public class EmployeeService {
@@ -24,5 +25,16 @@ public class EmployeeService {
 
     public List<Employee> getEmpRec(String empname) {
         return this.employeeRepository.findByEmployeeName(empname);
+    }
+
+    public boolean deleteAttendance(Long id) {
+        Optional<Employee> attendance = this.employeeRepository.findById(id);
+        if(attendance == null) return false;
+        this.employeeRepository.delete(attendance);
+        return true;
+    }
+
+    public Employee update(Employee employee) {
+        return this.employeeRepository.save(employee);
     }
 }

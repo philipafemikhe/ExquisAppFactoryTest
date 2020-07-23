@@ -7,13 +7,13 @@ import com.latecomer.LateComerApp.shared.OpeningHour;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
-import java.sql.Time;
-import java.sql.Timestamp;
+import java.text.DateFormat;
+import java.text.ParseException;
 import java.text.SimpleDateFormat;
-import java.util.Arrays;
-import java.util.Comparator;
-import java.util.Date;
-import java.util.List;
+import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
+import java.util.*;
 import java.util.stream.Collectors;
 
 @RestController
@@ -28,58 +28,67 @@ public class EmployeeController {
     }
 
     @GetMapping("/all")
-    public List<Aggregate> getAllEmployee(){
+    public Object getAllEmployee() throws ParseException {
         List<Employee> allEmployee = this.employeeService.getAll();
-        Aggregate summary = new Aggregate();
-        SimpleDateFormat hr = new SimpleDateFormat("HH");
-        SimpleDateFormat mn = new SimpleDateFormat("mm");
+        DateFormat hr = new SimpleDateFormat("HH");
+        DateFormat mn = new SimpleDateFormat("mm");
 
+        OpeningHour openingHour = new OpeningHour();
+        DateTimeFormatter dtf = DateTimeFormatter.ofPattern("yyyy-MM-dd");
+        LocalDateTime now = LocalDateTime.now(); //get current date
 
-        Time openTime = OpeningHour.startTime;
-        int openHr = Integer.parseInt(hr.format(openTime));
-        int openMin = Integer.parseInt(hr.format(openTime));
+        String openTime = dtf.format(now) + " " + openingHour.getStartTime(); //append resumption time to current date to get full date/time
+        System.out.println("Computed open time: " + openTime);
+        DateTimeFormatter fmt = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
+        LocalTime time = LocalDateTime.parse(openTime, fmt).toLocalTime();
+        System.out.println("Opening hour: " + time);
+
+        int openHr = time.getHour() - 1; // we are 1 hour ahead of GMT
+        int openMin = time.getMinute();
         allEmployee.sort(Comparator.comparing(Employee::getEmployeeName));
         String temp = "";
 
-        List<Aggregate> aggregates = null;
-        Aggregate tempAgr = new Aggregate();
+        List<Aggregate> aggregates = new ArrayList<>();
+
         for(Employee e: allEmployee){
-           if(!e.getEmployeeName().equals(temp)){
-               if(tempAgr != null) aggregates.add(tempAgr);
-               int lateHrs = Integer.parseInt(hr.format(e.getTimeIn().toString())) - openHr;
-               int lateMins = Integer.parseInt(mn.format(e.getTimeIn().toString())) - openMin;
-               Double owned = 0.2 * lateMins + 60 * lateHrs * 0.2;
-//               agr.setOwned(owned);
-//               aggregates.add(agr);
-               tempAgr.setOwned(owned);
-               tempAgr.setEmployee(e);
-           }else{
-               int lateHrs = Integer.parseInt(hr.format(e.getTimeIn().toString())) - openHr;
-               int lateMins = Integer.parseInt(mn.format(e.getTimeIn().toString())) - openMin;
-               Double owned = 0.2 * lateMins + 60 * lateHrs * 0.2;
-               tempAgr.setOwned(tempAgr.getOwned() + owned);
-           }
+            Aggregate tempAgr = new Aggregate();
+            LocalTime localTimeIn = e.getTimeIn().toLocalTime();
+            System.out.println("Resumed at time: " + (localTimeIn.getHour()-1));
+            int lateHrs = localTimeIn.getHour() - openHr - 1; //We are in GMT +1 zone
+            int lateMins = localTimeIn.getMinute() - openMin;
+            Double owned = 0.2 * lateMins + 60 * lateHrs * 0.2;
+            System.out.println("LateHrs: " + lateHrs + " lateMins: " + lateMins + " Owned: " + owned);
+            tempAgr.setOwned(owned);
+            tempAgr.setEmployee(e);
+            aggregates.add(tempAgr);
         }
 
-        return aggregates;
+       Object obj = aggregates.stream()
+               .sorted(Comparator.comparingDouble(Aggregate::getOwned).reversed())
+                .collect(Collectors.groupingBy(e ->e.getEmployee().getEmployeeName(),
+                        Collectors.summingDouble(e -> e.getOwned()
+                        )));
 
-//        allEmployee.stream()
-//                .collect(Collectors.groupingBy(e -> e.getEmployeeName(),
-//                        Collectors.summingInt(e->
-//                        {
-//                            int lateHrs = Integer.parseInt(hr.format(e.getTimeIn().toString())) - openHr;
-//                            int lateMins = Integer.parseInt(mn.format(e.getTimeIn().toString())) - openMin;
-//                            Double owned = 0.2 * lateMins + 60 * lateHrs * 0.2;
-//                            System.out.println("Owned: " + owned);
-//                            return;
-//                        })))
-//                .forEach((id,sumTargetCost)->System.out.println(id+"\t"+sumTargetCost));
-//        return  allEmployee;
+        return obj;
     }
 
     @GetMapping("/employee/{empname}")
     public List<Employee> getEmpRec(@PathVariable String empname){
         return this.employeeService.getEmpRec(empname);
     }
+
+    @DeleteMapping("/employee/delete/{id}") // delete attendance for an employee
+    public String deleteEmployeeAttendance(@PathVariable Long id){
+        if(this.employeeService.deleteAttendance(id)){
+            return "Attendance Record Deleted";
+        }
+        return "Record not found";
+    }
+
+    @PutMapping("/employee/update")
+    public Employee updateAttendance(@RequestBody Employee employee){
+        return this.employeeService.update(employee);
+    }
+
 }
